@@ -12,7 +12,7 @@ SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 
-model_type = "DQN"  # DQN or PPO
+MODEL_TYPES = ["DQN", "PPO"]
 
 
 class EarlyStoppingCallback(BaseCallback):
@@ -51,58 +51,68 @@ class EarlyStoppingCallback(BaseCallback):
         return continue_training
 
 
-env = make_vec_env(lambda: GridWorldEnv(m=6, n=6, k=5, render_mode=None, max_steps=30), n_envs=8, seed=SEED)
-eval_env = Monitor(GridWorldEnv(m=6, n=6, k=5, render_mode=None, max_steps=30))
-eval_env.reset(seed=SEED)
 
-early_stop_callback = EarlyStoppingCallback(patience=10, verbose=1)
+for model_type in MODEL_TYPES:
+    print(f"\n{'='*60}")
+    print(f"Starting training for {model_type} model")
+    print(f"{'='*60}\n")
+    
+    env = make_vec_env(lambda: GridWorldEnv(m=6, n=6, k=5, render_mode=None, max_steps=30), n_envs=8, seed=SEED)
+    eval_env = Monitor(GridWorldEnv(m=6, n=6, k=5, render_mode=None, max_steps=30))
+    eval_env.reset(seed=SEED)
 
-eval_callback = EvalCallback(
-    eval_env,
-    callback_after_eval=early_stop_callback,
-    eval_freq=50_000,
-    n_eval_episodes=1000,
-    log_path="./logs",
-    best_model_save_path=f"./models/{model_type.lower()}_best_model",
-    verbose=1,
-)
-
-
-if model_type == "PPO":
-
-    model = PPO(
-        policy="MultiInputPolicy",
-        env=env,
-        learning_rate=3e-4,
-        n_steps=2048,
-        batch_size=256,
-        n_epochs=4,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
-        verbose=0,
-        seed=SEED,
+    early_stop_callback = EarlyStoppingCallback(patience=10, verbose=1)
+    
+    eval_callback = EvalCallback(
+        eval_env,
+        callback_after_eval=early_stop_callback,
+        eval_freq=50_000,
+        n_eval_episodes=1000,
+        log_path=f"./logs/{model_type.lower()}",
+        best_model_save_path=f"./models/{model_type.lower()}_best_model",
+        verbose=1,
     )
 
+    if model_type == "PPO":
+        model = PPO(
+            policy="MultiInputPolicy",
+            env=env,
+            learning_rate=3e-4,
+            n_steps=2048,
+            batch_size=256,
+            n_epochs=4,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            ent_coef=0.01,
+            verbose=0,
+            seed=SEED,
+        )
+
+    elif model_type == "DQN":
+        model = DQN(
+            policy="MultiInputPolicy",
+            env=env,
+            learning_rate=3e-4,
+            buffer_size=100000,
+            learning_starts=10000,
+            batch_size=256,
+            gamma=0.99,
+            train_freq=4,
+            target_update_interval=1000,
+            exploration_fraction=0.1,
+            exploration_final_eps=0.05,
+            verbose=0,
+            seed=SEED,
+        )
+
+    # Train the model
     model.learn(total_timesteps=20_000_000, callback=eval_callback)
+    
+    print(f"Finished training {model_type} model")
+    
+    env.close()
+    eval_env.close()
 
-elif model_type == "DQN":
 
-    model = DQN(
-        policy="MultiInputPolicy",
-        env=env,
-        learning_rate=3e-4,
-        buffer_size=100000,
-        learning_starts=10000,
-        batch_size=256,
-        gamma=0.99,
-        train_freq=4,
-        target_update_interval=1000,
-        exploration_fraction=0.1,
-        exploration_final_eps=0.05,
-        verbose=0,
-        seed=SEED,
-    )
-
-    model.learn(total_timesteps=20_000_000, callback=eval_callback)
+print("All models trained successfully!")

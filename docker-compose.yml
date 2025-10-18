@@ -1,0 +1,14 @@
+services:
+  mle-assignment:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mle-assignment:latest
+    container_name: mle-assignment-container
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models
+    environment:
+      - PYTHONUNBUFFERED=1
+    
+
